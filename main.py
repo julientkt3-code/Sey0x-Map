@@ -170,6 +170,15 @@ def index():
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="RadatBot">
 <meta name="theme-color" content="#0d0d0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="RadatBot">
+<meta name="description" content="Radars et caméras de surveillance en temps réel — France">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png">
+<!-- iOS splash screens -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>RadatBot France</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
@@ -1262,6 +1271,10 @@ if(document.getElementById('settings-drawer').classList.contains('open')) fetchS
 });
 window.addEventListener('load',_hoVoXQ);
 setInterval(()=>fetch(String.fromCharCode(47,104,101,97,108,116,104)).catch(()=>{}), 14*60*1000);
+// ── PWA Service Worker
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
 </script>
 </body>
 </html>"""
@@ -1270,3 +1283,91 @@ setInterval(()=>fetch(String.fromCharCode(47,104,101,97,108,116,104)).catch(()=>
 if __name__ == '__main__':
     scheduled_update()
     app.run(host='0.0.0.0', port=8080)
+
+# ─── PWA Routes ───
+
+@app.route('/manifest.json')
+def manifest():
+    m = {
+        "name": "RadatBot France",
+        "short_name": "RadatBot",
+        "description": "Radars & caméras de surveillance en temps réel",
+        "start_url": "/",
+        "display": "standalone",
+        "orientation": "portrait",
+        "background_color": "#0d0d0f",
+        "theme_color": "#0d0d0f",
+        "icons": [
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+        ],
+        "categories": ["navigation", "utilities"],
+        "lang": "fr"
+    }
+    return jsonify(m)
+
+@app.route('/sw.js')
+def service_worker():
+    sw = """
+const CACHE = 'radatbot-v1';
+const ASSETS = ['/'];
+self.addEventListener('install', e => {
+    e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+    self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+    e.waitUntil(caches.keys().then(keys =>
+        Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ));
+    self.clients.claim();
+});
+self.addEventListener('fetch', e => {
+    const url = new URL(e.request.url);
+    // API calls: network only, no cache
+    if(url.pathname.startsWith('/api/')) {
+        e.respondWith(fetch(e.request).catch(() => new Response('{}', {headers:{'Content-Type':'application/json'}})));
+        return;
+    }
+    // App shell: cache first, fallback network
+    e.respondWith(
+        caches.match(e.request).then(cached => cached || fetch(e.request).then(resp => {
+            if(resp.ok) {
+                const clone = resp.clone();
+                caches.open(CACHE).then(c => c.put(e.request, clone));
+            }
+            return resp;
+        }))
+    );
+});
+"""
+    return Response(sw, mimetype='application/javascript')
+
+@app.route('/icon-192.png')
+def icon192():
+    # SVG radar icon rendered as PNG via inline SVG base64
+    import base64
+    svg = '''<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="40" fill="#0d0d0f"/>
+  <circle cx="96" cy="96" r="70" fill="none" stroke="#007aff" stroke-width="6" opacity="0.3"/>
+  <circle cx="96" cy="96" r="50" fill="none" stroke="#007aff" stroke-width="6" opacity="0.5"/>
+  <circle cx="96" cy="96" r="30" fill="none" stroke="#007aff" stroke-width="6" opacity="0.8"/>
+  <circle cx="96" cy="96" r="12" fill="#007aff"/>
+  <path d="M96 26 L106 70 L96 62 L86 70 Z" fill="#007aff"/>
+</svg>'''
+    b64 = base64.b64encode(svg.encode()).decode()
+    # Return SVG as PNG-compatible (browsers accept SVG for manifest icons)
+    resp = Response(base64.b64decode(b64), mimetype='image/svg+xml')
+    resp.headers['Content-Type'] = 'image/svg+xml'
+    return Response(svg, mimetype='image/svg+xml')
+
+@app.route('/icon-512.png')
+def icon512():
+    svg = '''<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#0d0d0f"/>
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#007aff" stroke-width="14" opacity="0.3"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#007aff" stroke-width="14" opacity="0.5"/>
+  <circle cx="256" cy="256" r="90" fill="none" stroke="#007aff" stroke-width="14" opacity="0.8"/>
+  <circle cx="256" cy="256" r="32" fill="#007aff"/>
+  <path d="M256 66 L280 180 L256 160 L232 180 Z" fill="#007aff"/>
+</svg>'''
+    return Response(svg, mimetype='image/svg+xml')
