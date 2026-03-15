@@ -259,6 +259,20 @@ def index():
   body.dark .btn-secondary{background:rgba(255,255,255,.08)}
   .btn-danger{background:rgba(255,59,48,.12);color:var(--danger)}
 
+  /* iOS pseudo-fullscreen */
+  body.ios-fullscreen{position:fixed;inset:0;overflow:hidden}
+  body.ios-fullscreen #map{position:fixed;inset:0;z-index:1}
+  body.ios-fullscreen #fab-group,body.ios-fullscreen #speedo,body.ios-fullscreen #data-badge,
+  body.ios-fullscreen #status-pill,body.ios-fullscreen #alert-banner{z-index:9500}
+
+  /* Threshold badges */
+  .thresh-display{display:flex;flex-direction:column;gap:8px;width:100%}
+  .thresh-top{display:flex;justify-content:space-between;align-items:center}
+  .thresh-badges{display:flex;gap:5px;flex-wrap:wrap}
+  .thresh-badge{font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;border:1px solid var(--border);color:var(--text2);cursor:pointer;background:var(--surface);transition:.15s;}
+  .thresh-badge.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+
   /* SPEEDO */
   #speedo{
     position:absolute;bottom:32px;left:20px;z-index:1000;
@@ -449,10 +463,20 @@ def index():
     <label class="toggle"><input type="checkbox" id="tog-audio" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
   </div>
   <div class="divider"></div>
-  <div class="drawer-title">Seuil d'alerte</div>
-  <div class="setting-row">
-    <span class="setting-label" id="thresh-val">500 m</span>
-    <input type="range" min="100" max="2000" step="100" value="500" id="thresh-slider" oninput="updateThresh(this.value)" style="width:110px;accent-color:var(--accent)">
+  <div class="drawer-title">Distance d'alerte</div>
+  <div class="thresh-display">
+    <div class="thresh-top">
+      <span class="setting-label">Seuil</span>
+      <span class="setting-label" id="thresh-val" style="color:var(--accent);font-size:15px;font-weight:800">500 m</span>
+    </div>
+    <input type="range" min="100" max="3000" step="100" value="500" id="thresh-slider" oninput="updateThresh(this.value)">
+    <div class="thresh-badges">
+      <span class="thresh-badge" onclick="setThresh(200)">200 m</span>
+      <span class="thresh-badge sel" onclick="setThresh(500)">500 m</span>
+      <span class="thresh-badge" onclick="setThresh(1000)">1 km</span>
+      <span class="thresh-badge" onclick="setThresh(2000)">2 km</span>
+      <span class="thresh-badge" onclick="setThresh(3000)">3 km</span>
+    </div>
   </div>
   <div class="divider"></div>
   <button class="action-btn btn-primary" onclick="testBeep()">🔊 Tester le son</button>
@@ -580,18 +604,19 @@ function toggleMapMode(){
 }
 
 function initMap(){
-  map = L.map('map',{zoomControl:false,preferCanvas:true,updateWhenZooming:false,updateWhenIdle:true,tap:true,tapTolerance:15,bounceAtZoomLimits:false})
-         .setView([48.8566,2.3522],13);
+  map = L.map('map',{
+    zoomControl:false,preferCanvas:true,updateWhenZooming:false,updateWhenIdle:true,
+    tap:false,tapTolerance:15,bounceAtZoomLimits:false,
+    dragging:true,touchZoom:true,scrollWheelZoom:true,doubleClickZoom:true,boxZoom:false
+  }).setView([48.8566,2.3522],13);
 
   applyTheme();
-
   map.addLayer(radarCluster);
   map.addLayer(cameraCluster);
 
   proximityLineBg   = L.polyline([],{color:'rgba(255,59,48,.18)',weight:10,lineCap:'round',lineJoin:'round'}).addTo(map);
   proximityLineGlow = L.polyline([],{color:'rgba(255,59,48,.35)',weight:6,lineCap:'round',lineJoin:'round'}).addTo(map);
   proximityLine     = L.polyline([],{color:'#ff3b30',weight:2.5,dashArray:'10 7',opacity:.95,lineCap:'round'}).addTo(map);
-  // Inject animation class on the SVG path after it's in DOM
   setTimeout(()=>{
     const el=proximityLine.getElement && proximityLine.getElement();
     if(el) el.classList.add('prox-animated');
@@ -1059,7 +1084,10 @@ function testBeep(){playBeep(880,.4,200);}
 function toggleFollow(){
   following=!following;
   document.getElementById('fab-locate').classList.toggle('active',following);
-  if(following) map.setView([lastPos.lat,lastPos.lng],15);
+  if(following){
+    // Recentrer immédiatement sur la position actuelle
+    map.setView([lastPos.lat,lastPos.lng], map.getZoom()<15?15:map.getZoom(), {animate:true});
+  }
 }
 function toggleSettings(){
   document.getElementById('settings-drawer').classList.toggle('open');
@@ -1070,12 +1098,39 @@ function toggleLayer(type,on){
   else on?map.addLayer(cameraCluster):map.removeLayer(cameraCluster);
 }
 function toggleFullscreen(){
-  !document.fullscreenElement?document.documentElement.requestFullscreen():document.exitFullscreen();
+  // iOS Safari ne supporte pas requestFullscreen — on utilise un pseudo-fullscreen CSS
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  if(isIOS){
+    document.body.classList.toggle('ios-fullscreen');
+    const btn=document.querySelector('.fab[onclick="toggleFullscreen()"]');
+    const isFs=document.body.classList.contains('ios-fullscreen');
+    if(btn) btn.innerHTML=isFs
+      ?`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 0 2-2h3M3 16h3a2 2 0 0 0 2 2v3"/></svg>`
+      :`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>`;
+    return;
+  }
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen().catch(()=>{
+      // Fallback si refusé
+      document.body.classList.add('ios-fullscreen');
+    });
+  } else {
+    document.exitFullscreen().catch(()=>{});
+  }
 }
 function updateThresh(v){
   alertThreshold=parseInt(v);
-  document.getElementById('thresh-val').textContent=v+' m';
+  const label = v>=1000 ? (v/1000).toFixed(v%1000===0?0:1)+' km' : v+' m';
+  document.getElementById('thresh-val').textContent=label;
+  document.getElementById('thresh-slider').value=v;
+  // Sync badges
+  document.querySelectorAll('.thresh-badge').forEach(b=>{
+    b.classList.toggle('sel', parseInt(b.textContent)===alertThreshold||b.textContent===label);
+  });
   alertedSet.clear();
+}
+function setThresh(v){
+  updateThresh(v);
 }
 function toggleTestLine(){
   testLine=!testLine;
