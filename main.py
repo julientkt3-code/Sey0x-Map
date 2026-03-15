@@ -607,13 +607,6 @@ def index():
 <div id="map"></div>
 
 <script>
-(function(){
-const _t=new Date();
-setInterval(function(){
-const _n=new Date();
-if(_n-_t>200){(function(){})['constructor']('debugger')();}
-},50);
-})();
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('keydown',e=>{
 if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&['I','J','C','U'].includes(e.key))||(e.ctrlKey&&e.key==='U')){
@@ -650,7 +643,7 @@ function _rGOsQa(){
 document.body.classList.toggle('dark', _ogSfm);
 document.getElementById('btn-map-mode').textContent = _ogSfm ? '☀️' : '🌙';
 if(_lOUn) map.removeLayer(_lOUn);
-_lOUn = L._lOUn(_ogSfm ? _Nedhor.night.url : _Nedhor.day.url, {
+_lOUn = L.tileLayer(_ogSfm ? _Nedhor.night.url : _Nedhor.day.url, {
 attribution: _Nedhor.day.attr, maxZoom:20, keepBuffer:2, updateWhenIdle:true
 }).addTo(map);
 _lOUn.bringToBack();
