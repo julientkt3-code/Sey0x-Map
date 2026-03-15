@@ -15,6 +15,30 @@ except ImportError:
 
 app = Flask(__name__)
 
+
+# ── Security hardening
+app.config['PROPAGATE_EXCEPTIONS'] = False
+
+@app.after_request
+def _harden_headers(r):
+    r.headers.pop('Server', None)
+    r.headers.pop('X-Powered-By', None)
+    r.headers['X-Content-Type-Options'] = 'nosniff'
+    r.headers['X-Frame-Options'] = 'DENY'
+    r.headers['Referrer-Policy'] = 'no-referrer'
+    return r
+
+@app.errorhandler(404)
+def _e404(e): return '',404
+
+@app.errorhandler(500)
+def _e500(e): return '',500
+
+@app.errorhandler(Exception)
+def _eall(e):
+    logger.error(f"Unhandled: {e}")
+    return '',500
+
 FILE_CAMERAS = "camera.json"
 FILE_RADARS  = "radars.json"
 UPDATE_INTERVAL_MINUTES = 15
@@ -574,791 +598,679 @@ def index():
 <div id="map"></div>
 
 <script>
-// ─── TILES ───
-const TILES = {
-  day: {
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attr: '© CartoDB © OSM'
-  },
-  night: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attr: '© CartoDB © OSM'
-  }
+(function(){
+const _dp=function(){};
+const _t=new Date();
+setInterval(function(){
+  const _n=new Date();
+  if(_n-_t>200){(function(){})['constructor']('debugger')();}
+},50);
+const _x=function(){
+  const _el=new Image();
+  Object.defineProperty(_el,'id',{get:function(){
+    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#000;color:#fff;font-size:24px;flex-direction:column;gap:16px"><span style="font-size:48px">🚫</span><b>Accès refusé</b></div>';
+    throw new Error();
+  }});
+  console.log('%c ',_el);
 };
-
-// Auto-detect day/night by hour
-function isNight() {
-  const h = new Date().getHours();
-  return h < 7 || h >= 20;
+setInterval(_x,1000);
+})();
+document.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('keydown',e=>{
+  if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&['I','J','C','U'].includes(e.key))||(e.ctrlKey&&e.key==='U')){
+    e.preventDefault();e.stopPropagation();return false;
+  }
+});
+const _Nedhor = {
+day: {
+url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+attr: '© CartoDB © OSM'
+},
+night: {
+url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+attr: '© CartoDB © OSM'
 }
-
-let darkMode = isNight();
-let tileLayer;
-
-let map, userMarker, accuracyCircle, proximityLine, proximityLineBg, proximityLineGlow;
-let radarCluster = L.markerClusterGroup({disableClusteringAtZoom:15,maxClusterRadius:60,animate:false,chunkedLoading:true});
-let cameraCluster = L.markerClusterGroup({disableClusteringAtZoom:15,maxClusterRadius:50,animate:false,chunkedLoading:true});
-let allRadars=[], allCameras=[], allTroncons=[];
-let following=true, testLine=false;
-let followZoom=15;
-let lastPos={lat:48.8566,lng:2.3522,heading:0};
-let alertedSet=new Set(), alertThreshold=500;
-let audioCtx=null;
-
-function applyTheme(){
-  document.body.classList.toggle('dark', darkMode);
-  document.getElementById('btn-map-mode').textContent = darkMode ? '☀️' : '🌙';
-  if(tileLayer) map.removeLayer(tileLayer);
-  tileLayer = L.tileLayer(darkMode ? TILES.night.url : TILES.day.url, {
-    attribution: TILES.day.attr, maxZoom:20, keepBuffer:2, updateWhenIdle:true
-  }).addTo(map);
-  tileLayer.bringToBack();
+};
+function _EFvhqx() {
+const h = new Date().getHours();
+return h < 7 || h >= 20;
 }
-
+let _ogSfm = _EFvhqx();
+let _lOUn;
+let map, _ZjCb, _FfybzS, _ZIfAQ, _uhzuRpI, _tlDjEQ;
+let _UsJf = L.markerClusterGroup({disableClusteringAtZoom:15,maxClusterRadius:60,animate:false,chunkedLoading:true});
+let _OpQii = L.markerClusterGroup({disableClusteringAtZoom:15,maxClusterRadius:50,animate:false,chunkedLoading:true});
+let _lmOQvb=[], _KDjxkQo=[], _yQYh=[];
+let _MIwaYmN=true, _FGrFXfA=false;
+let _dNshsS=15;
+let _oMyre={lat:48.8566,lng:2.3522,heading:0};
+let _QkhgKOC=new Set(), _yUeZuqy=500;
+let _eukB=null;
+function _rGOsQa(){
+document.body.classList.toggle('dark', _ogSfm);
+document.getElementById('btn-map-mode').textContent = _ogSfm ? '☀️' : '🌙';
+if(_lOUn) map.removeLayer(_lOUn);
+_lOUn = L._lOUn(_ogSfm ? _Nedhor.night.url : _Nedhor.day.url, {
+attribution: _Nedhor.day.attr, maxZoom:20, keepBuffer:2, updateWhenIdle:true
+}).addTo(map);
+_lOUn.bringToBack();
+}
 function toggleMapMode(){
-  darkMode = !darkMode;
-  applyTheme();
+_ogSfm = !_ogSfm;
+_rGOsQa();
 }
-
-function initMap(){
-  map = L.map('map',{
-    zoomControl:false,preferCanvas:true,updateWhenZooming:false,updateWhenIdle:true,
-    tap:false,tapTolerance:15,bounceAtZoomLimits:false,
-    dragging:true,touchZoom:true,scrollWheelZoom:true,doubleClickZoom:true,boxZoom:false
-  }).setView([48.8566,2.3522],13);
-
-  applyTheme();
-  map.addLayer(radarCluster);
-  map.addLayer(cameraCluster);
-
-  proximityLineBg   = L.polyline([],{color:'rgba(255,59,48,.18)',weight:10,lineCap:'round',lineJoin:'round'}).addTo(map);
-  proximityLineGlow = L.polyline([],{color:'rgba(255,59,48,.35)',weight:6,lineCap:'round',lineJoin:'round'}).addTo(map);
-  proximityLine     = L.polyline([],{color:'#ff3b30',weight:2.5,dashArray:'10 7',opacity:.95,lineCap:'round'}).addTo(map);
-  setTimeout(()=>{
-    const el=proximityLine.getElement && proximityLine.getElement();
-    if(el) el.classList.add('prox-animated');
-  },300);
-
-  map.on('dragstart',()=>{ following=false; document.getElementById('fab-locate').classList.remove('active'); });
-  // Quand l'utilisateur zoome manuellement, on mémorise le nouveau zoom pour le suivi
-  map.on('zoomend',()=>{
-    if(following){
-      followZoom=map.getZoom();
-      // Sync slider et badges sans déclencher setView
-      document.getElementById('zoom-val').textContent='Zoom '+followZoom;
-      if(document.getElementById('zoom-slider')) document.getElementById('zoom-slider').value=followZoom;
-      document.querySelectorAll('.zoom-badge').forEach(b=>b.classList.toggle('sel',parseInt(b.dataset.z)===followZoom));
-    }
-  });
-  map.on('click',()=>document.getElementById('settings-drawer').classList.remove('open'));
-
-  loadRadars(); loadCameras();
-  promptGeoloc();
+function _hoVoXQ(){
+map = L.map('map',{
+zoomControl:false,preferCanvas:true,updateWhenZooming:false,updateWhenIdle:true,
+tap:false,tapTolerance:15,bounceAtZoomLimits:false,
+dragging:true,touchZoom:true,scrollWheelZoom:true,doubleClickZoom:true,boxZoom:false
+}).setView([48.8566,2.3522],13);
+_rGOsQa();
+map.addLayer(_UsJf);
+map.addLayer(_OpQii);
+_uhzuRpI   = L.polyline([],{color:'rgba(255,59,48,.18)',weight:10,lineCap:'round',lineJoin:'round'}).addTo(map);
+_tlDjEQ = L.polyline([],{color:'rgba(255,59,48,.35)',weight:6,lineCap:'round',lineJoin:'round'}).addTo(map);
+_ZIfAQ     = L.polyline([],{color:'#ff3b30',weight:2.5,dashArray:'10 7',opacity:.95,lineCap:'round'}).addTo(map);
+setTimeout(()=>{
+const el=_ZIfAQ.getElement && _ZIfAQ.getElement();
+if(el) el.classList.add('prox-animated');
+},300);
+map.on('dragstart',()=>{ _MIwaYmN=false; document.getElementById('fab-locate').classList.remove('active'); });
+map.on('zoomend',()=>{
+if(_MIwaYmN){
+_dNshsS=map.getZoom();
+document.getElementById('zoom-val').textContent='Zoom '+_dNshsS;
+if(document.getElementById('zoom-slider')) document.getElementById('zoom-slider').value=_dNshsS;
+document.querySelectorAll('.zoom-badge').forEach(b=>b.classList.toggle('sel',parseInt(b.dataset.z)===_dNshsS));
 }
-
-// Demande de géolocalisation avec overlay propre
-function promptGeoloc(){
-  if(!navigator.geolocation){ return; }
-  // Vérifie si permission déjà accordée
-  if(navigator.permissions){
-    navigator.permissions.query({name:'geolocation'}).then(r=>{
-      if(r.state==='granted'){ startTracking(); }
-      else { showGeoOverlay(); }
-    }).catch(()=>showGeoOverlay());
-  } else {
-    showGeoOverlay();
-  }
+});
+map.on('click',()=>document.getElementById('settings-drawer').classList.remove('open'));
+_PsCGx(); _TAMZv();
+_qHfDMv();
 }
-
-function showGeoOverlay(){
-  document.getElementById('geo-overlay').style.display='flex';
+function _qHfDMv(){
+if(!navigator.geolocation){ return; }
+if(navigator.permissions){
+navigator.permissions.query({name:'geolocation'}).then(r=>{
+if(r.state==='granted'){ _cckzQkI(); }
+else { _pkwIq(); }
+}).catch(()=>_pkwIq());
+} else {
+_pkwIq();
 }
-
-function startTracking(){
-  document.getElementById('geo-overlay').style.display='none';
-  navigator.geolocation.watchPosition(onPosition, err=>{
-    console.warn('GPS:',err.message);
-    if(err.code===1) showGeoOverlay(); // permission refusée
-  }, {enableHighAccuracy:true,maximumAge:0,timeout:10000});
 }
-
-// ─── POSITION ───
-let _lastVisibilityCheck=0;
-function onPosition(pos){
-  const {latitude:lat,longitude:lng,speed,heading,accuracy}=pos.coords;
-  const kmh=Math.round((speed||0)*3.6);
-  const hdg=heading||lastPos.heading;
-  lastPos={lat,lng,heading:hdg};
-  document.getElementById('speed-val').textContent=kmh;
-  document.getElementById('speedo').classList.toggle('speeding',kmh>130);
-  updateUserMarker(lat,lng,hdg,accuracy);
-  // computeVisibility est coûteux avec 70k caméras → max toutes les 3s
-  const now=Date.now();
-  if(now-_lastVisibilityCheck>3000){
-    computeVisibility(lat,lng,hdg,kmh);
-    _lastVisibilityCheck=now;
-  }
-  updateAlerts(lat,lng);
-  if(following) map.setView([lat,lng], followZoom, {animate:true,duration:0.5});
-  if(dashActive){ updateDashSpeed(kmh); updateDashRadar(lat,lng); }
+function _pkwIq(){
+document.getElementById('geo-overlay').style.display='flex';
 }
-
-function updateUserMarker(lat,lng,hdg,acc){
-  const fill = darkMode ? '#0a84ff' : '#007aff';
-  const ring = darkMode ? 'rgba(10,132,255,.2)' : 'rgba(0,122,255,.15)';
-  const icon=L.divIcon({
-    className:'',
-    html:`<svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${hdg||0}deg)">
-      <circle cx="22" cy="22" r="20" fill="${ring}" stroke="${fill}" stroke-width="2.5"/>
-      <circle cx="22" cy="22" r="5" fill="${fill}"/>
-      <path d="M22 5 L29 33 L22 27 L15 33 Z" fill="${fill}"/>
-    </svg>`,
-    iconSize:[44,44], iconAnchor:[22,22]
-  });
-  if(!userMarker){
-    userMarker=L.marker([lat,lng],{icon,zIndexOffset:9999}).addTo(map);
-    accuracyCircle=L.circle([lat,lng],{radius:acc||20,color:fill,weight:1,fillOpacity:.06}).addTo(map);
-  } else {
-    userMarker.setLatLng([lat,lng]); userMarker.setIcon(icon);
-    accuracyCircle.setLatLng([lat,lng]).setRadius(acc||20);
-  }
+function _cckzQkI(){
+document.getElementById('geo-overlay').style.display='none';
+navigator.geolocation.watchPosition(_MAiS, err=>{
+console.warn('GPS:',err.message);
+if(err.code===1) _pkwIq();
+}, {enableHighAccuracy:true,maximumAge:0,timeout:10000});
 }
-
-// ─── VISIBILITY ENGINE ───
-// But : détecter si un capteur peut NOUS VOIR / nous identifier, pas si on l'approche.
-//
-// Modèle physique :
-//  CAMÉRA (dôme/LAPI/fixe) : omnidirectionnelle par défaut (360°).
-//    → Le seul facteur est la distance. Une caméra derrière nous peut très bien nous voir.
-//    → Portée utile : 80m (lecture plaque nette), 200m (présence détectable)
-//    → Score = fonction exponentielle décroissante de la distance
-//
-//  RADAR FIXE / TRONÇON : bidirectionnel ou unidirectionnel, mais sans info de cap
-//    → On traite comme omnidirectionnel à courte portée avec score distance
-//    → Portée : 150m (fixe), 500m (tronçon)
-//
-//  RADAR MOBILE : directionnel, on modèle un cône depuis le capteur vers nous
-//    → Angle : depuis le capteur on calcule si on est "devant" lui
-//    → Approximation : si on s'approche du capteur (distance décroit), risque max
-//
-//  Score final [0..1] → seuils 0.25=orange, 0.6=rouge
-
-function bearingTo(fromLat,fromLng,toLat,toLng){
-  const dLon=(toLng-fromLng)*Math.PI/180;
-  const lat1=fromLat*Math.PI/180, lat2=toLat*Math.PI/180;
-  const y=Math.sin(dLon)*Math.cos(lat2);
-  const x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
-  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+let _nhbEqH=0;
+function _MAiS(pos){
+const {latitude:lat,longitude:lng,speed,heading,accuracy}=pos.coords;
+const vvtqYn=Math.round((speed||0)*3.6);
+const vZbDVMl=heading||_oMyre.heading;
+_oMyre={lat,lng,heading:vZbDVMl};
+document.getElementById('speed-val').textContent=vvtqYn;
+document.getElementById('speedo').classList.toggle('speeding',vvtqYn>130);
+_PKWUvBb(lat,lng,vZbDVMl,accuracy);
+const now=Date.now();
+if(now-_nhbEqH>3000){
+_CSizQso(lat,lng,vZbDVMl,vvtqYn);
+_nhbEqH=now;
 }
-function angleDiff(a,b){ return Math.abs((a-b+180+360)%360-180); }
-
-// Courbe douce : score=1 à d=0, score=0 à d=range, décroissance exponentielle
-function distScore(d, range, steepness=3){
-  return Math.max(0, Math.exp(-steepness*(d/range)));
+_POAaz(lat,lng);
+if(_MIwaYmN) map.setView([lat,lng], _dNshsS, {animate:true,duration:0.5});
+if(_qaUmTh){ _oPCM(vvtqYn); _sYPP(lat,lng); }
 }
-
-function computeVisibility(lat,lng,hdg,speedKmh){
-  let maxScore=0;
-
-  // ── CAMÉRAS : omnidirectionnelles ──
-  // Portée réelle lecture plaque : ~50m net, ~100m détectable
-  // Avec 70k caméras on reste strict sur la distance
-  for(const c of allCameras){
-    if(!c.latitude||!c.longitude) continue;
-    const d=map.distance([lat,lng],[c.latitude,c.longitude]);
-    if(d>120) continue;
-    // Score exponentiel : à 40m = élevé, à 100m = faible
-    const score=distScore(d, 100, 5);
-    if(score>maxScore) maxScore=score;
-    if(maxScore>=0.95) break;
-  }
-
-  // ── RADARS ──
-  for(const r of allRadars){
-    if(!r.lat||!r.lng) continue;
-    const d=map.distance([lat,lng],[r.lat,r.lng]);
-    const cls=classifyRadar(r.type||'');
-    let range=150, steep=3.5, directional=false;
-
-    if(cls==='troncon'){range=500;steep=2;}
-    else if(cls==='mobile'){range=120;steep=4;directional=true;}
-    else if(cls==='feu'){range=80;steep=5;}
-    else if(cls==='pesage'){range=100;steep=4;}
-
-    if(d>range) continue;
-
-    let score=distScore(d, range, steep);
-
-    // Radar mobile : directionnel → score réduit si on n'est pas dans son axe de mesure.
-    // On modèle que le radar mobile fait face à une direction ≈ la notre + 180°
-    // (il nous mesure de face ou de dos). Si on est de côté = score réduit.
-    if(directional){
-      // Cap depuis le radar vers nous
-      const brgFromRadar=bearingTo(r.lat,r.lng,lat,lng);
-      // On suppose que le radar est aligné sur la route = notre cap ou son opposé
-      const frontAngle=angleDiff(brgFromRadar, hdg);         // face à face
-      const rearAngle =angleDiff(brgFromRadar, (hdg+180)%360); // dos à dos
-      const axisAngle =Math.min(frontAngle, rearAngle);      // plus proche des deux axes
-      // Dans l'axe (<30°) = plein score, de côté (>60°) = score réduit de 70%
-      const dirFactor = axisAngle<30 ? 1 : axisAngle<60 ? 0.6 : 0.25;
-      score*=dirFactor;
-    }
-
-    // Facteur vitesse pour les radars vitesse
-    if(cls==='fixe'||cls==='troncon'||cls==='mobile'){
-      if(speedKmh>130) score=Math.min(1,score*1.5);
-      else if(speedKmh>90) score=Math.min(1,score*1.2);
-    }
-
-    if(score>maxScore) maxScore=score;
-  }
-
-  // Mise à jour du dot
-  const dot=document.getElementById('vis-dot');
-  const lbl=document.getElementById('vis-label');
-  dot.className='';
-  if(maxScore>=0.75){
-    dot.classList.add('red'); lbl.textContent='Zone de capture';
-  } else if(maxScore>=0.45){
-    dot.classList.add('orange'); lbl.textContent='Capteur en portée';
-  } else {
-    lbl.textContent='Hors champ';
-  }
-  // Sync dashboard dot
-  if(dashActive) updateDashVis();
+function _PKWUvBb(lat,lng,vZbDVMl,vnUybGV){
+const vqCsex = _ogSfm ? '#0a84ff' : '#007aff';
+const vxTJifAn = _ogSfm ? 'rgba(10,132,255,.2)' : 'rgba(0,122,255,.15)';
+const icon=L.divIcon({
+className:'',
+html:`<svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${vZbDVMl||0}deg)">
+<circle cx="22" cy="22" r="20" vqCsex="${vxTJifAn}" stroke="${vqCsex}" stroke-width="2.5"/>
+<circle cx="22" cy="22" r="5" vqCsex="${vqCsex}"/>
+<path d="M22 5 L29 33 L22 27 L15 33 Z" vqCsex="${vqCsex}"/>
+</svg>`,
+iconSize:[44,44], iconAnchor:[22,22]
+});
+if(!_ZjCb){
+_ZjCb=L.marker([lat,lng],{icon,zIndexOffset:9999}).addTo(map);
+_FfybzS=L.circle([lat,lng],{radius:vnUybGV||20,color:vqCsex,weight:1,fillOpacity:.06}).addTo(map);
+} else {
+_ZjCb.setLatLng([lat,lng]); _ZjCb.setIcon(icon);
+_FfybzS.setLatLng([lat,lng]).setRadius(vnUybGV||20);
 }
-
-// ─── ALERTS ───
-function updateAlerts(lat,lng){
-  let minDist=Infinity, closest=null, closestType='RADAR';
-  for(const r of allRadars){
-    if(!r.lat||!r.lng) continue;
-    const d=map.distance([lat,lng],[r.lat,r.lng]);
-    if(d<minDist){minDist=d;closest=r;closestType=getRadarLabel(r.type||'');}
-  }
-  const banner=document.getElementById('alert-banner');
-  const thresh=testLine?99999:alertThreshold;
-  if(closest&&minDist<thresh){
-    const ll=[[lat,lng],[closest.lat,closest.lng]];
-    proximityLineBg.setLatLngs(ll);
-    proximityLineGlow.setLatLngs(ll);
-    proximityLine.setLatLngs(ll);
-    document.getElementById('alert-type').textContent=closestType;
-    document.getElementById('alert-dist').textContent=minDist<1000?Math.round(minDist)+' m':(minDist/1000).toFixed(1)+' km';
-    document.getElementById('alert-speed').textContent=closest.vitesse?'Limite : '+closest.vitesse+' km/h':'';
-    banner.classList.add('show');
-    for(const step of [alertThreshold,700,500,400,300,200,100,30]){
-      if(minDist<=step&&!alertedSet.has(step)){
-        if(document.getElementById('tog-audio').checked) playBeep(step<200?1050:880,step<100?.5:.25);
-        alertedSet.add(step);
-      }
-    }
-  } else {
-    proximityLine.setLatLngs([]);
-    proximityLineBg.setLatLngs([]);
-    proximityLineGlow.setLatLngs([]);
-    banner.classList.remove('show');
-  }
-  if(minDist>alertThreshold+150) alertedSet.clear();
 }
-
-// ─── LOAD DATA ───
-async function loadRadars(){
-  try{
-    const r=await fetch('/api/radars'); const data=await r.json();
-    // Support nouveau format {radars, troncons} ET ancien format tableau
-    allRadars = Array.isArray(data) ? data : (data.radars || []);
-    allTroncons = Array.isArray(data) ? [] : (data.troncons || []);
-
-    document.getElementById('badge-radars').textContent=allRadars.length;
-    document.getElementById('radar-count').textContent=allRadars.length+' entrées';
-    const layers=[];
-    allRadars.forEach(rd=>{
-      if(!rd.lat||!rd.lng) return;
-      const m=L.marker([rd.lat,rd.lng],{icon:getRadarIcon(rd.type||'',rd.vitesse)});
-      m.bindPopup(`<b>${getRadarLabel(rd.type||'')}</b>${rd.vitesse?'<br>Limite : '+rd.vitesse+' km/h':''}${rd.route?'<br>'+rd.route:''}${rd.commune?'<br>'+rd.commune:''}`,{maxWidth:200});
-      layers.push(m);
-    });
-    radarCluster.addLayers(layers);
-
-    // Pas de tracé tronçon — les radars tronçons sont affichés comme marqueurs normaux
-  } catch(e){console.error('Radars:',e);}
+function _jZtgNbd(fromLat,fromLng,toLat,toLng){
+const dLon=(toLng-fromLng)*Math.PI/180;
+const lat1=fromLat*Math.PI/180, lat2=toLat*Math.PI/180;
+const y=Math.sin(dLon)*Math.cos(lat2);
+const x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+return (Math.atan2(y,x)*180/Math.PI+360)%360;
 }
-
-async function loadCameras(){
-  try{
-    const r=await fetch('/api/cameras'); allCameras=await r.json();
-    document.getElementById('badge-cams').textContent=allCameras.length;
-    document.getElementById('cam-count').textContent=allCameras.length+' entrées';
-    const layers=[];
-    allCameras.forEach(c=>{
-      if(!c.latitude||!c.longitude) return;
-      const isKML = c.source === 'KML-Paris';
-      const isMarseille = c.source === 'uMap-Marseille';
-      const icon = makeCameraIconOSM();
-      const m=L.marker([c.latitude,c.longitude],{icon});
-      const srcLabel = isKML ? '🔵 Préfecture Paris' : isMarseille ? '🔵 uMap Marseille' : '🔵 OpenStreetMap';
-      m.bindPopup(`<b>${c.nom||'Caméra'}</b><br><small>${srcLabel}</small>${c.direction&&c.direction!=='Non spécifiée'?'<br>'+c.direction:''}`,{maxWidth:220});
-      layers.push(m);
-    });
-    cameraCluster.addLayers(layers);
-  } catch(e){console.error('Cameras:',e);}
+function _EwKt(a,b){ return Math.abs((a-b+180+360)%360-180); }
+function _nigyy(d, vrRkKS, steepness=3){
+return Math.max(0, Math.exp(-steepness*(d/vrRkKS)));
 }
-
-// Caméra OSM — bleu
-function makeCameraIconOSM(){
-  const svg=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M23 7l-7 5 7 5V7z" fill="#fff" opacity=".9"/>
-    <rect x="1" y="5" width="15" height="14" rx="2.5" fill="#fff" opacity=".9"/>
-    <circle cx="8.5" cy="12" r="3.5" fill="#007aff"/>
-    <circle cx="8.5" cy="12" r="1.5" fill="#fff"/>
-  </svg>`;
-  return L.divIcon({className:'',html:`<div style="width:34px;height:34px;border-radius:50%;background:#1c3a5e;border:2.5px solid #007aff;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,122,255,.35);">${svg}</div>`,iconSize:[34,34],iconAnchor:[17,17]});
+function _CSizQso(lat,lng,vZbDVMl,vEcQiG){
+let vxVOO=0;
+for(const c of _KDjxkQo){
+if(!c.latitude||!c.longitude) continue;
+const d=map.distance([lat,lng],[c.latitude,c.longitude]);
+if(d>120) continue;
+const vbxXTCSz=_nigyy(d, 100, 5);
+if(vbxXTCSz>vxVOO) vxVOO=vbxXTCSz;
+if(vxVOO>=0.95) break;
 }
-
-// Caméra Préfecture Paris — bleu
-function makeCameraIconParis(){
-  const svg=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M23 7l-7 5 7 5V7z" fill="#fff" opacity=".9"/>
-    <rect x="1" y="5" width="15" height="14" rx="2.5" fill="#fff" opacity=".9"/>
-    <circle cx="8.5" cy="12" r="3.5" fill="#007aff"/>
-    <circle cx="8.5" cy="12" r="1.5" fill="#fff"/>
-  </svg>`;
-  return L.divIcon({className:'',html:`<div style="width:34px;height:34px;border-radius:50%;background:#1c3a5e;border:2.5px solid #007aff;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,122,255,.45);">${svg}</div>`,iconSize:[34,34],iconAnchor:[17,17]});
+for(const r of _lmOQvb){
+if(!r.lat||!r.lng) continue;
+const d=map.distance([lat,lng],[r.lat,r.lng]);
+const vRIqvCR=_BRGt(r.type||'');
+let vrRkKS=150, vvEHaoGj=3.5, vzceVIQd=false;
+if(vRIqvCR==='troncon'){vrRkKS=500;vvEHaoGj=2;}
+else if(vRIqvCR==='mobile'){vrRkKS=120;vvEHaoGj=4;vzceVIQd=true;}
+else if(vRIqvCR==='feu'){vrRkKS=80;vvEHaoGj=5;}
+else if(vRIqvCR==='pesage'){vrRkKS=100;vvEHaoGj=4;}
+if(d>vrRkKS) continue;
+let vbxXTCSz=_nigyy(d, vrRkKS, vvEHaoGj);
+if(vzceVIQd){
+const vKFtxz=_jZtgNbd(r.lat,r.lng,lat,lng);
+const vufMXHjZ=_EwKt(vKFtxz, vZbDVMl);
+const vLcgny =_EwKt(vKFtxz, (vZbDVMl+180)%360);
+const vPaOLzu =Math.min(vufMXHjZ, vLcgny);
+const vWDPhe = vPaOLzu<30 ? 1 : vPaOLzu<60 ? 0.6 : 0.25;
+vbxXTCSz*=vWDPhe;
 }
-
-// Classify radar type from API string
-function classifyRadar(type){
-  const t=(type||'').toLowerCase();
-  if(t==='feu_rouge'||t==='feu_vitesse'||t.includes('feu')||t.includes('rouge')) return 'feu';
-  if(t==='troncon'||t.includes('troncon')||t.includes('tronçon')||t.includes('section')||t.includes('itineraire')||t.includes('moyenne')) return 'troncon';
-  if(t==='voiture'||t.includes('voiture')||t.includes('embarqu')) return 'voiture';
-  if(t==='urbain'||t.includes('urbain')) return 'urbain';
-  if(t==='mobile'||t.includes('mobile')||t.includes('chantier')||t.includes('autonome')) return 'mobile';
-  if(t==='passage_niveau'||t.includes('passage')||t.includes('niveau')) return 'passage_niveau';
-  if(t==='tourelle'||t.includes('tourelle')) return 'tourelle';
-  if(t==='double_sens'||t==='double_face'||t.includes('double')||t.includes('discriminant')) return 'troncon';
-  if(t==='pesage'||t.includes('pesag')) return 'pesage';
-  return 'fixe';
+if(vRIqvCR==='fixe'||vRIqvCR==='troncon'||vRIqvCR==='mobile'){
+if(vEcQiG>130) vbxXTCSz=Math.min(1,vbxXTCSz*1.5);
+else if(vEcQiG>90) vbxXTCSz=Math.min(1,vbxXTCSz*1.2);
 }
-
-function getRadarLabel(type){
-  const c=classifyRadar(type);
-  const labels={
-    fixe:'RADAR FIXE', troncon:'RADAR TRONÇON', mobile:'RADAR MOBILE',
-    feu:'FEU ROUGE', pesage:'PESAGE', passage_niveau:'PASSAGE À NIVEAU',
-    tourelle:'RADAR TOURELLE', urbain:'RADAR URBAIN', voiture:'VOITURE RADAR'
-  };
-  return labels[c]||'RADAR';
+if(vbxXTCSz>vxVOO) vxVOO=vbxXTCSz;
 }
-
-
-// SVG icon builder
-function svgIcon(svgInner, bg, border, size=40){
-  const html=`<div style="
-    width:${size}px;height:${size}px;border-radius:50%;
-    background:${bg};border:3px solid ${border};
-    display:flex;align-items:center;justify-content:center;
-    box-shadow:0 3px 12px rgba(0,0,0,.28);
-    ">${svgInner}</div>`;
-  return L.divIcon({className:'',html,iconSize:[size,size],iconAnchor:[size/2,size/2]});
+const dot=document.getElementById('vis-dot');
+const lbl=document.getElementById('vis-vSFEorrG');
+dot.className='';
+if(vxVOO>=0.75){
+dot.classList.add('red'); lbl.textContent='Zone de capture';
+} else if(vxVOO>=0.45){
+dot.classList.add('orange'); lbl.textContent='Capteur en portée';
+} else {
+lbl.textContent='Hors champ';
 }
-
-function getRadarIcon(type, vitesse){
-  const c=classifyRadar(type);
-
-  if(c==='feu'){
-    // Traffic light icon
-    const svg=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="7" y="2" width="10" height="20" rx="3" fill="#1c1c1e" stroke="#ff9500" stroke-width="1.5"/>
-      <circle cx="12" cy="6" r="2.2" fill="#ff3b30"/>
-      <circle cx="12" cy="12" r="2.2" fill="#ff9500"/>
-      <circle cx="12" cy="18" r="2.2" fill="#34c759"/>
-      <line x1="12" y1="22" x2="12" y2="24" stroke="#ff9500" stroke-width="1.5"/>
-    </svg>`;
-    return svgIcon(svg,'#1c1c1e','#ff9500',38);
-  }
-
-  if(c==='troncon'){
-    // Two radar posts connected
-    const svg=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="3" y="4" width="4" height="12" rx="1.5" fill="#fff" opacity=".9"/>
-      <rect x="17" y="4" width="4" height="12" rx="1.5" fill="#fff" opacity=".9"/>
-      <path d="M7 7 Q12 4 17 7" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-      <path d="M7 11 Q12 8 17 11" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round" opacity=".5"/>
-      <line x1="5" y1="16" x2="5" y2="20" stroke="#fff" stroke-width="1.5" opacity=".7"/>
-      <line x1="19" y1="16" x2="19" y2="20" stroke="#fff" stroke-width="1.5" opacity=".7"/>
-    </svg>`;
-    return svgIcon(svg,'#5856d6','#7b79e8',40);
-  }
-
-  if(c==='mobile'){
-    // Pistolet radar / radar mobile — icône pistolet radar réaliste
-    const svg=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Corps du pistolet radar -->
-      <rect x="2" y="9" width="13" height="6" rx="2" fill="#fff" opacity=".95"/>
-      <!-- Poignée -->
-      <rect x="5" y="15" width="4" height="5" rx="1.5" fill="#fff" opacity=".8"/>
-      <!-- Canon / objectif -->
-      <rect x="14" y="10.5" width="5" height="3" rx="1" fill="#fff" opacity=".9"/>
-      <circle cx="20" cy="12" r="1.5" fill="#ff9500"/>
-      <!-- Ondes radar -->
-      <path d="M20.5 8.5 Q23 10 23 12 Q23 14 20.5 15.5" stroke="#fff" stroke-width="1.4" fill="none" stroke-linecap="round" opacity=".8"/>
-      <path d="M21.5 10 Q24 11 24 12 Q24 13 21.5 14" stroke="#fff" stroke-width="1" fill="none" stroke-linecap="round" opacity=".45"/>
-      <!-- Gâchette -->
-      <path d="M7 15 L6 19" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
-    </svg>`;
-    return svgIcon(svg,'#b45309','#ff9500',40);
-  }
-
-  if(c==='pesage'){
-    // Scale/truck
-    const svg=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="14" width="20" height="4" rx="1" fill="#fff" opacity=".9"/>
-      <line x1="12" y1="6" x2="12" y2="14" stroke="#fff" stroke-width="1.8"/>
-      <line x1="6" y1="10" x2="18" y2="10" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
-      <circle cx="6" cy="10" r="2" fill="#fff" opacity=".9"/>
-      <circle cx="18" cy="10" r="2" fill="#fff" opacity=".9"/>
-      <circle cx="12" cy="6" r="1.5" fill="#fff"/>
-    </svg>`;
-    return svgIcon(svg,'#30b0c7','#5ac8fa',38);
-  }
-
-  if(c==='urbain'){
-    // Radar urbain — caméra sur potelet de ville
-    const svg=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <line x1="12" y1="22" x2="12" y2="10" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-      <rect x="8" y="6" width="10" height="7" rx="2" fill="#fff" opacity=".9"/>
-      <circle cx="13" cy="9.5" r="2.2" fill="#34c759"/>
-      <circle cx="13" cy="9.5" r="1" fill="#1c1c1e"/>
-      <rect x="10" y="20" width="4" height="2" rx="1" fill="#fff" opacity=".7"/>
-      <rect x="7" y="22" width="10" height="1.5" rx=".75" fill="#fff" opacity=".5"/>
-    </svg>`;
-    return svgIcon(svg,'#0a7a3c','#34c759',40);
-  }
-
-  if(c==='voiture'){
-    // Voiture radar embarquée — voiture avec flash
-    const svg=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="1" y="10" width="18" height="9" rx="2.5" fill="#fff" opacity=".9"/>
-      <path d="M3 10 L5 5 H15 L17 10" fill="#fff" opacity=".7"/>
-      <circle cx="5" cy="19" r="2.2" fill="#fff"/>
-      <circle cx="15" cy="19" r="2.2" fill="#fff"/>
-      <rect x="20" y="8" width="3" height="6" rx="1.5" fill="#fff" opacity=".6"/>
-      <path d="M20 7 L22 4 L24 7" fill="#fff" opacity=".8" stroke-linejoin="round"/>
-      <circle cx="7" cy="8" r="1" fill="#e879f9" opacity=".9"/>
-      <circle cx="11" cy="7" r="1" fill="#e879f9" opacity=".9"/>
-    </svg>`;
-    return svgIcon(svg,'#7c3aed','#e879f9',40);
-  }
-
-  if(c==='passage_niveau'){
-    const svg=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <line x1="4" y1="4" x2="20" y2="20" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
-      <line x1="20" y1="4" x2="4" y2="20" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
-      <circle cx="4" cy="4" r="2" fill="#ff3b30"/>
-      <circle cx="20" cy="4" r="2" fill="#ff3b30"/>
-    </svg>`;
-    return svgIcon(svg,'#1c1c1e','#ff3b30',38);
-  }
-
-  // Radar fixe — boîtier radar réaliste
-  // Avec vitesse en surimpression si disponible
-  const spd=vitesse?`<text x="20" y="35" text-anchor="middle" font-family="Outfit,sans-serif" font-size="8" font-weight="800" fill="#ff3b30">${vitesse}</text>`:'';
-  const svgBox=`<svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <!-- Support / mât -->
-    <rect x="18" y="26" width="4" height="10" rx="1.5" fill="#888"/>
-    <rect x="14" y="34" width="12" height="3" rx="1.5" fill="#666"/>
-    <!-- Caisson principal -->
-    <rect x="6" y="8" width="28" height="20" rx="4" fill="#2c2c2e" stroke="#444" stroke-width="1.2"/>
-    <!-- Vitre / objectif -->
-    <rect x="10" y="12" width="20" height="12" rx="2.5" fill="#1a1a2e" stroke="#555" stroke-width=".8"/>
-    <!-- Lentille centrale -->
-    <circle cx="20" cy="18" r="5" fill="#0a0a1a" stroke="#ff3b30" stroke-width="1.5"/>
-    <circle cx="20" cy="18" r="2.5" fill="#1c1c3a"/>
-    <circle cx="18.5" cy="16.5" r=".9" fill="rgba(255,255,255,.25)"/>
-    <!-- Indicateur LED -->
-    <circle cx="29" cy="12" r="1.8" fill="#ff3b30"/>
-    <!-- Flash éclair -->
-    <path d="M22 14 L19.5 18.5 L21.5 18.5 L19 22 L22.5 17 L20.5 17 Z" fill="#ff9500" opacity=".85"/>
-    ${spd}
-  </svg>`;
-  const label=vitesse?`<span style="position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);font-family:'Outfit',sans-serif;font-size:9px;font-weight:800;color:#ff3b30;white-space:nowrap;line-height:1;">${vitesse}</span>`:'';
-  const html=`<div style="position:relative;width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #ff3b30;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 14px rgba(255,59,48,.45);">${svgBox}${label}</div>`;
-  return L.divIcon({className:'',html,iconSize:[44,44],iconAnchor:[22,22]});
+if(_qaUmTh) _KzEx();
 }
-
-// Camera icon — lens SVG
-// ─── AUDIO ───
-function getCtx(){
-  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-  if(audioCtx.state==='suspended') audioCtx.resume();
-  return audioCtx;
+function _POAaz(lat,lng){
+let vrSmdpQ=Infinity, vJSMLR=null, vOWAmF='RADAR';
+for(const r of _lmOQvb){
+if(!r.lat||!r.lng) continue;
+const d=map.distance([lat,lng],[r.lat,r.lng]);
+if(d<vrSmdpQ){vrSmdpQ=d;vJSMLR=r;vOWAmF=_JCUJJg(r.type||'');}
 }
-function playBeep(freq=880,vol=.25,dur=160){
-  try{
-    const ctx=getCtx(), osc=ctx.createOscillator(), g=ctx.createGain();
-    osc.connect(g); g.connect(ctx.destination);
-    osc.frequency.value=freq;
-    g.gain.setValueAtTime(vol,ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+dur/1000);
-    osc.start(ctx.currentTime); osc.stop(ctx.currentTime+dur/1000);
-  }catch(e){}
+const vLzTl=document.getElementById('alert-vLzTl');
+const vzvmp=_FGrFXfA?99999:_yUeZuqy;
+if(vJSMLR&&vrSmdpQ<vzvmp){
+const ll=[[lat,lng],[vJSMLR.lat,vJSMLR.lng]];
+_uhzuRpI.setLatLngs(ll);
+_tlDjEQ.setLatLngs(ll);
+_ZIfAQ.setLatLngs(ll);
+document.getElementById('alert-type').textContent=vOWAmF;
+document.getElementById('alert-dist').textContent=vrSmdpQ<1000?Math.round(vrSmdpQ)+' m':(vrSmdpQ/1000).toFixed(1)+' km';
+document.getElementById('alert-speed').textContent=vJSMLR.vkQFeg?'Limite : '+vJSMLR.vkQFeg+' km/h':'';
+vLzTl.classList.add('show');
+for(const vdOGniF of [_yUeZuqy,700,500,400,300,200,100,30]){
+if(vrSmdpQ<=vdOGniF&&!_QkhgKOC.has(vdOGniF)){
+if(document.getElementById('tog-audio').checked) _MiaVv(vdOGniF<200?1050:880,vdOGniF<100?.5:.25);
+_QkhgKOC.add(vdOGniF);
 }
-function testBeep(){playBeep(880,.4,200);}
-
-// ─── CONTROLS ───
+}
+} else {
+_ZIfAQ.setLatLngs([]);
+_uhzuRpI.setLatLngs([]);
+_tlDjEQ.setLatLngs([]);
+vLzTl.classList.remove('show');
+}
+if(vrSmdpQ>_yUeZuqy+150) _QkhgKOC.clear();
+}
+async function _PsCGx(){
+try{
+const r=await fetch(String.fromCharCode(47,97,112,105,47,114,97,100,97,114,115)); const data=await r.json();
+_lmOQvb = Array.isArray(data) ? data : (data.vYnXUWz || []);
+_yQYh = Array.isArray(data) ? [] : (data.vHxHl || []);
+document.getElementById('badge-vYnXUWz').textContent=_lmOQvb.length;
+document.getElementById('vQtrGyI-count').textContent=_lmOQvb.length+' entrées';
+const vWrNShm=[];
+_lmOQvb.forEach(rd=>{
+if(!rd.lat||!rd.lng) return;
+const m=L.marker([rd.lat,rd.lng],{icon:_vSGHQZ(rd.type||'',rd.vkQFeg)});
+m.bindPopup(`<b>${_JCUJJg(rd.type||'')}</b>${rd.vkQFeg?'<br>Limite : '+rd.vkQFeg+' km/h':''}${rd.route?'<br>'+rd.route:''}${rd.commune?'<br>'+rd.commune:''}`,{maxWidth:200});
+vWrNShm.push(m);
+});
+_UsJf.addLayers(vWrNShm);
+} catch(e){console.error('Radars:',e);}
+}
+async function _TAMZv(){
+try{
+const r=await fetch(String.fromCharCode(47,97,112,105,47,99,97,109,101,114,97,115)); _KDjxkQo=await r.json();
+document.getElementById('badge-cams').textContent=_KDjxkQo.length;
+document.getElementById('cam-count').textContent=_KDjxkQo.length+' entrées';
+const vWrNShm=[];
+_KDjxkQo.forEach(c=>{
+if(!c.latitude||!c.longitude) return;
+const vYKEEq = c.source === 'KML-Paris';
+const vezmoGC = c.source === 'uMap-Marseille';
+const icon = _XRMiC();
+const m=L.marker([c.latitude,c.longitude],{icon});
+const vuGUShNR = vYKEEq ? '🔵 Préfecture Paris' : vezmoGC ? '🔵 uMap Marseille' : '🔵 OpenStreetMap';
+m.bindPopup(`<b>${c.nom||'Caméra'}</b><br><small>${vuGUShNR}</small>${c.direction&&c.direction!=='Non spécifiée'?'<br>'+c.direction:''}`,{maxWidth:220});
+vWrNShm.push(m);
+});
+_OpQii.addLayers(vWrNShm);
+} catch(e){console.error('Cameras:',e);}
+}
+function _XRMiC(){
+const svg=`<svg width="18" height="18" viewBox="0 0 24 24" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M23 7l-7 5 7 5V7z" vqCsex="#fff" opacity=".9"/>
+<rect x="1" y="5" width="15" height="14" rx="2.5" vqCsex="#fff" opacity=".9"/>
+<circle cx="8.5" cy="12" r="3.5" vqCsex="#007aff"/>
+<circle cx="8.5" cy="12" r="1.5" vqCsex="#fff"/>
+</svg>`;
+return L.divIcon({className:'',html:`<div style="width:34px;height:34px;border-radius:50%;background:#1c3a5e;border:2.5px solid #007aff;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,122,255,.35);">${svg}</div>`,iconSize:[34,34],iconAnchor:[17,17]});
+}
+function _KtmS(){
+const svg=`<svg width="18" height="18" viewBox="0 0 24 24" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M23 7l-7 5 7 5V7z" vqCsex="#fff" opacity=".9"/>
+<rect x="1" y="5" width="15" height="14" rx="2.5" vqCsex="#fff" opacity=".9"/>
+<circle cx="8.5" cy="12" r="3.5" vqCsex="#007aff"/>
+<circle cx="8.5" cy="12" r="1.5" vqCsex="#fff"/>
+</svg>`;
+return L.divIcon({className:'',html:`<div style="width:34px;height:34px;border-radius:50%;background:#1c3a5e;border:2.5px solid #007aff;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,122,255,.45);">${svg}</div>`,iconSize:[34,34],iconAnchor:[17,17]});
+}
+function _BRGt(type){
+const t=(type||'').toLowerCase();
+if(t==='feu_rouge'||t===String.fromCharCode(102,101,117,95,118,105,116,101,115,115,101)||t.includes('feu')||t.includes('rouge')) return 'feu';
+if(t==='troncon'||t.includes('troncon')||t.includes('tronçon')||t.includes('section')||t.includes('itineraire')||t.includes('moyenne')) return 'troncon';
+if(t==='voiture'||t.includes('voiture')||t.includes('embarqu')) return 'voiture';
+if(t==='urbain'||t.includes('urbain')) return 'urbain';
+if(t==='mobile'||t.includes('mobile')||t.includes('chantier')||t.includes('autonome')) return 'mobile';
+if(t==='passage_niveau'||t.includes('passage')||t.includes('niveau')) return 'passage_niveau';
+if(t==='tourelle'||t.includes('tourelle')) return 'tourelle';
+if(t==='double_sens'||t==='double_face'||t.includes('double')||t.includes('discriminant')) return 'troncon';
+if(t==='pesage'||t.includes('pesag')) return 'pesage';
+return 'fixe';
+}
+function _JCUJJg(type){
+const c=_BRGt(type);
+const labels={
+fixe:'RADAR FIXE', troncon:'RADAR TRONÇON', mobile:'RADAR MOBILE',
+feu:'FEU ROUGE', pesage:'PESAGE', passage_niveau:'PASSAGE À NIVEAU',
+tourelle:'RADAR TOURELLE', urbain:'RADAR URBAIN', voiture:'VOITURE RADAR'
+};
+return labels[c]||'RADAR';
+}
+function _QrORem(svgInner, bg, border, size=40){
+const html=`<div style="
+width:${size}px;height:${size}px;border-radius:50%;
+background:${bg};border:3px solid ${border};
+display:flex;align-items:center;justify-content:center;
+box-shadow:0 3px 12px rgba(0,0,0,.28);
+">${svgInner}</div>`;
+return L.divIcon({className:'',html,iconSize:[size,size],iconAnchor:[size/2,size/2]});
+}
+function _vSGHQZ(type, vkQFeg){
+const c=_BRGt(type);
+if(c==='feu'){
+const svg=`<svg width="20" height="20" viewBox="0 0 24 24" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="7" y="2" width="10" height="20" rx="3" vqCsex="#1c1c1e" stroke="#ff9500" stroke-width="1.5"/>
+<circle cx="12" cy="6" r="2.2" vqCsex="#ff3b30"/>
+<circle cx="12" cy="12" r="2.2" vqCsex="#ff9500"/>
+<circle cx="12" cy="18" r="2.2" vqCsex="#34c759"/>
+<line x1="12" y1="22" x2="12" y2="24" stroke="#ff9500" stroke-width="1.5"/>
+</svg>`;
+return _QrORem(svg,'#1c1c1e','#ff9500',38);
+}
+if(c==='troncon'){
+const svg=`<svg width="20" height="20" viewBox="0 0 24 24" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="3" y="4" width="4" height="12" rx="1.5" vqCsex="#fff" opacity=".9"/>
+<rect x="17" y="4" width="4" height="12" rx="1.5" vqCsex="#fff" opacity=".9"/>
+<path d="M7 7 Q12 4 17 7" stroke="#fff" stroke-width="1.8" vqCsex="none" stroke-linecap="round"/>
+<path d="M7 11 Q12 8 17 11" stroke="#fff" stroke-width="1.2" vqCsex="none" stroke-linecap="round" opacity=".5"/>
+<line x1="5" y1="16" x2="5" y2="20" stroke="#fff" stroke-width="1.5" opacity=".7"/>
+<line x1="19" y1="16" x2="19" y2="20" stroke="#fff" stroke-width="1.5" opacity=".7"/>
+</svg>`;
+return _QrORem(svg,'#5856d6','#7b79e8',40);
+}
+if(c==='mobile'){
+const svg=`<svg width="22" height="22" viewBox="0 0 24 24" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<!-- Corps du pistolet vQtrGyI -->
+<rect x="2" y="9" width="13" height="6" rx="2" vqCsex="#fff" opacity=".95"/>
+<!-- Poignée -->
+<rect x="5" y="15" width="4" height="5" rx="1.5" vqCsex="#fff" opacity=".8"/>
+<!-- Canon / objectif -->
+<rect x="14" y="10.5" width="5" height="3" rx="1" vqCsex="#fff" opacity=".9"/>
+<circle cx="20" cy="12" r="1.5" vqCsex="#ff9500"/>
+<!-- Ondes vQtrGyI -->
+<path d="M20.5 8.5 Q23 10 23 12 Q23 14 20.5 15.5" stroke="#fff" stroke-width="1.4" vqCsex="none" stroke-linecap="round" opacity=".8"/>
+<path d="M21.5 10 Q24 11 24 12 Q24 13 21.5 14" stroke="#fff" stroke-width="1" vqCsex="none" stroke-linecap="round" opacity=".45"/>
+<!-- Gâchette -->
+<path d="M7 15 L6 19" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
+</svg>`;
+return _QrORem(svg,'#b45309','#ff9500',40);
+}
+if(c==='pesage'){
+const svg=`<svg width="20" height="20" viewBox="0 0 24 24" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2" y="14" width="20" height="4" rx="1" vqCsex="#fff" opacity=".9"/>
+<line x1="12" y1="6" x2="12" y2="14" stroke="#fff" stroke-width="1.8"/>
+<line x1="6" y1="10" x2="18" y2="10" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="6" cy="10" r="2" vqCsex="#fff" opacity=".9"/>
+<circle cx="18" cy="10" r="2" vqCsex="#fff" opacity=".9"/>
+<circle cx="12" cy="6" r="1.5" vqCsex="#fff"/>
+</svg>`;
+return _QrORem(svg,'#30b0c7','#5ac8fa',38);
+}
+if(c==='urbain'){
+const svg=`<svg width="20" height="20" viewBox="0 0 24 24" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<line x1="12" y1="22" x2="12" y2="10" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+<rect x="8" y="6" width="10" height="7" rx="2" vqCsex="#fff" opacity=".9"/>
+<circle cx="13" cy="9.5" r="2.2" vqCsex="#34c759"/>
+<circle cx="13" cy="9.5" r="1" vqCsex="#1c1c1e"/>
+<rect x="10" y="20" width="4" height="2" rx="1" vqCsex="#fff" opacity=".7"/>
+<rect x="7" y="22" width="10" height="1.5" rx=".75" vqCsex="#fff" opacity=".5"/>
+</svg>`;
+return _QrORem(svg,'#0a7a3c','#34c759',40);
+}
+if(c==='voiture'){
+const svg=`<svg width="20" height="20" viewBox="0 0 24 24" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="1" y="10" width="18" height="9" rx="2.5" vqCsex="#fff" opacity=".9"/>
+<path d="M3 10 L5 5 H15 L17 10" vqCsex="#fff" opacity=".7"/>
+<circle cx="5" cy="19" r="2.2" vqCsex="#fff"/>
+<circle cx="15" cy="19" r="2.2" vqCsex="#fff"/>
+<rect x="20" y="8" width="3" height="6" rx="1.5" vqCsex="#fff" opacity=".6"/>
+<path d="M20 7 L22 4 L24 7" vqCsex="#fff" opacity=".8" stroke-linejoin="round"/>
+<circle cx="7" cy="8" r="1" vqCsex="#e879f9" opacity=".9"/>
+<circle cx="11" cy="7" r="1" vqCsex="#e879f9" opacity=".9"/>
+</svg>`;
+return _QrORem(svg,'#7c3aed','#e879f9',40);
+}
+if(c==='passage_niveau'){
+const svg=`<svg width="20" height="20" viewBox="0 0 24 24" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<line x1="4" y1="4" x2="20" y2="20" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="20" y1="4" x2="4" y2="20" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+<circle cx="4" cy="4" r="2" vqCsex="#ff3b30"/>
+<circle cx="20" cy="4" r="2" vqCsex="#ff3b30"/>
+</svg>`;
+return _QrORem(svg,'#1c1c1e','#ff3b30',38);
+}
+const vlMrPpgv=vkQFeg?`<text x="20" y="35" text-anchor="middle" font-family="Outfit,sans-serif" font-size="8" font-weight="800" vqCsex="#ff3b30">${vkQFeg}</text>`:'';
+const vQGwSQ=`<svg width="28" height="28" viewBox="0 0 40 40" vqCsex="none" xmlns="http://www.w3.org/2000/svg">
+<!-- Support / mât -->
+<rect x="18" y="26" width="4" height="10" rx="1.5" vqCsex="#888"/>
+<rect x="14" y="34" width="12" height="3" rx="1.5" vqCsex="#666"/>
+<!-- Caisson principal -->
+<rect x="6" y="8" width="28" height="20" rx="4" vqCsex="#2c2c2e" stroke="#444" stroke-width="1.2"/>
+<!-- Vitre / objectif -->
+<rect x="10" y="12" width="20" height="12" rx="2.5" vqCsex="#1a1a2e" stroke="#555" stroke-width=".8"/>
+<!-- Lentille centrale -->
+<circle cx="20" cy="18" r="5" vqCsex="#0a0a1a" stroke="#ff3b30" stroke-width="1.5"/>
+<circle cx="20" cy="18" r="2.5" vqCsex="#1c1c3a"/>
+<circle cx="18.5" cy="16.5" r=".9" vqCsex="rgba(255,255,255,.25)"/>
+<!-- Indicateur LED -->
+<circle cx="29" cy="12" r="1.8" vqCsex="#ff3b30"/>
+<!-- Flash éclair -->
+<path d="M22 14 L19.5 18.5 L21.5 18.5 L19 22 L22.5 17 L20.5 17 Z" vqCsex="#ff9500" opacity=".85"/>
+${vlMrPpgv}
+</svg>`;
+const vSFEorrG=vkQFeg?`<span style="position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);font-family:'Outfit',sans-serif;font-size:9px;font-weight:800;color:#ff3b30;white-space:nowrap;line-height:1;">${vkQFeg}</span>`:'';
+const html=`<div style="position:relative;width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #ff3b30;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 14px rgba(255,59,48,.45);">${vQGwSQ}${vSFEorrG}</div>`;
+return L.divIcon({className:'',html,iconSize:[44,44],iconAnchor:[22,22]});
+}
+function _nykML(){
+if(!_eukB) _eukB=new(window.AudioContext||window.webkitAudioContext)();
+if(_eukB.state==='suspended') _eukB.resume();
+return _eukB;
+}
+function _MiaVv(vPylDF=880,vRMEvN=.25,vWTGEOUU=160){
+try{
+const vliOcHhc=_nykML(), vUrOk=vliOcHhc.createOscillator(), g=vliOcHhc.createGain();
+vUrOk.connect(g); g.connect(vliOcHhc.destination);
+vUrOk.frequency.value=vPylDF;
+g.gain.setValueAtTime(vRMEvN,vliOcHhc.currentTime);
+g.gain.exponentialRampToValueAtTime(.001,vliOcHhc.currentTime+vWTGEOUU/1000);
+vUrOk.start(vliOcHhc.currentTime); vUrOk.stop(vliOcHhc.currentTime+vWTGEOUU/1000);
+}catch(e){}
+}
+function testBeep(){_MiaVv(880,.4,200);}
 function toggleFollow(){
-  following=!following;
-  document.getElementById('fab-locate').classList.toggle('active',following);
-  if(following){
-    map.setView([lastPos.lat,lastPos.lng], followZoom, {animate:true,duration:0.6});
-  }
+_MIwaYmN=!_MIwaYmN;
+document.getElementById('fab-locate').classList.toggle('active',_MIwaYmN);
+if(_MIwaYmN){
+map.setView([_oMyre.lat,_oMyre.lng], _dNshsS, {animate:true,duration:0.6});
+}
 }
 function toggleSettings(){
-  document.getElementById('settings-drawer').classList.toggle('open');
-  document.getElementById('fab-settings').classList.toggle('active');
+document.getElementById('settings-drawer').classList.toggle('open');
+document.getElementById('fab-settings').classList.toggle('active');
 }
 function toggleLayer(type,on){
-  if(type==='radars') on?map.addLayer(radarCluster):map.removeLayer(radarCluster);
-  else on?map.addLayer(cameraCluster):map.removeLayer(cameraCluster);
+if(type==='vYnXUWz') on?map.addLayer(_UsJf):map.removeLayer(_UsJf);
+else on?map.addLayer(_OpQii):map.removeLayer(_OpQii);
 }
 function toggleFullscreen(){
-  // iOS Safari ne supporte pas requestFullscreen — on utilise un pseudo-fullscreen CSS
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
-  if(isIOS){
-    document.body.classList.toggle('ios-fullscreen');
-    const btn=document.querySelector('.fab[onclick="toggleFullscreen()"]');
-    const isFs=document.body.classList.contains('ios-fullscreen');
-    if(btn) btn.innerHTML=isFs
-      ?`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 0 2-2h3M3 16h3a2 2 0 0 0 2 2v3"/></svg>`
-      :`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>`;
-    return;
-  }
-  if(!document.fullscreenElement){
-    document.documentElement.requestFullscreen().catch(()=>{
-      // Fallback si refusé
-      document.body.classList.add('ios-fullscreen');
-    });
-  } else {
-    document.exitFullscreen().catch(()=>{});
-  }
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+if(isIOS){
+document.body.classList.toggle('ios-fullscreen');
+const btn=document.querySelector('.fab[onclick="toggleFullscreen()"]');
+const isFs=document.body.classList.contains('ios-fullscreen');
+if(btn) btn.innerHTML=isFs
+?`<svg viewBox="0 0 24 24" vqCsex="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 0 2-2h3M3 16h3a2 2 0 0 0 2 2v3"/></svg>`
+:`<svg viewBox="0 0 24 24" vqCsex="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>`;
+return;
+}
+if(!document.fullscreenElement){
+document.documentElement.requestFullscreen().catch(()=>{
+document.body.classList.add('ios-fullscreen');
+});
+} else {
+document.exitFullscreen().catch(()=>{});
+}
 }
 function updateThresh(v){
-  alertThreshold=parseInt(v);
-  const label = v>=1000 ? (v/1000).toFixed(v%1000===0?0:1)+' km' : v+' m';
-  document.getElementById('thresh-val').textContent=label;
-  document.getElementById('thresh-slider').value=v;
-  // Sync badges
-  document.querySelectorAll('.thresh-badge').forEach(b=>{
-    b.classList.toggle('sel', parseInt(b.textContent)===alertThreshold||b.textContent===label);
-  });
-  alertedSet.clear();
+_yUeZuqy=parseInt(v);
+const vSFEorrG = v>=1000 ? (v/1000).toFixed(v%1000===0?0:1)+' km' : v+' m';
+document.getElementById('vzvmp-val').textContent=vSFEorrG;
+document.getElementById('vzvmp-slider').value=v;
+document.querySelectorAll('.vzvmp-badge').forEach(b=>{
+b.classList.toggle('sel', parseInt(b.textContent)===_yUeZuqy||b.textContent===vSFEorrG);
+});
+_QkhgKOC.clear();
 }
 function setThresh(v){
-  updateThresh(v);
+updateThresh(v);
 }
 function updateFollowZoom(v){
-  followZoom=parseInt(v);
-  document.getElementById('zoom-val').textContent='Zoom '+v;
-  document.getElementById('zoom-slider').value=v;
-  document.querySelectorAll('.zoom-badge').forEach(b=>{
-    b.classList.toggle('sel', parseInt(b.dataset.z)===followZoom);
-  });
-  // Appliquer immédiatement si suivi actif
-  if(following) map.setView([lastPos.lat,lastPos.lng], followZoom, {animate:true,duration:0.5});
+_dNshsS=parseInt(v);
+document.getElementById('zoom-val').textContent='Zoom '+v;
+document.getElementById('zoom-slider').value=v;
+document.querySelectorAll('.zoom-badge').forEach(b=>{
+b.classList.toggle('sel', parseInt(b.dataset.z)===_dNshsS);
+});
+if(_MIwaYmN) map.setView([_oMyre.lat,_oMyre.lng], _dNshsS, {animate:true,duration:0.5});
 }
 function toggleTestLine(){
-  testLine=!testLine;
-  const btn=document.getElementById('btn-test-line');
-  btn.className='action-btn '+(testLine?'btn-danger':'btn-secondary');
-  btn.textContent=testLine?'❌ Stopper le test':'📍 Tester ligne radar';
-  if(testLine) updateAlerts(lastPos.lat,lastPos.lng);
-  else{proximityLine.setLatLngs([]);document.getElementById('alert-banner').classList.remove('show');}
+_FGrFXfA=!_FGrFXfA;
+const btn=document.getElementById('btn-test-line');
+btn.className='action-btn '+(_FGrFXfA?'btn-danger':'btn-secondary');
+btn.textContent=_FGrFXfA?'❌ Stopper le test':'📍 Tester ligne vQtrGyI';
+if(_FGrFXfA) _POAaz(_oMyre.lat,_oMyre.lng);
+else{_ZIfAQ.setLatLngs([]);document.getElementById('alert-vLzTl').classList.remove('show');}
 }
-
-// ─── DASHBOARD ───
-let dashActive=false, dashClock=null, wakeLock=null;
-const ARC_LEN=345;
-const DB_MAX_SPEED=160;
-
+let _qaUmTh=false, _gMKt=null, _tOERzFK=null;
+const _aTuHk=345;
+const _Xjxq=160;
 function enterDashboard(){
-  dashActive=true;
-  document.getElementById('dashboard').classList.add('active');
-  document.getElementById('fab-group').style.display='none';
-  document.getElementById('speedo').style.display='none';
-  document.getElementById('data-badge').style.display='none';
-  document.getElementById('status-pill').style.display='none';
-  document.getElementById('alert-banner').classList.remove('show');
-  if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-  if('wakeLock' in navigator) navigator.wakeLock.request('screen').then(wl=>wakeLock=wl).catch(()=>{});
-  dashClock=setInterval(updateDashClock,1000);
-  updateDashClock();
+_qaUmTh=true;
+document.getElementById('dashboard').classList.add('active');
+document.getElementById('fab-group').style.display='none';
+document.getElementById('speedo').style.display='none';
+document.getElementById('data-badge').style.display='none';
+document.getElementById('status-pill').style.display='none';
+document.getElementById('alert-vLzTl').classList.remove('show');
+if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+if('_tOERzFK' in navigator) navigator._tOERzFK.request('screen').then(wl=>_tOERzFK=wl).catch(()=>{});
+_gMKt=setInterval(_WekdYkW,1000);
+_WekdYkW();
 }
-
 function exitDashboard(){
-  dashActive=false;
-  document.getElementById('dashboard').classList.remove('active');
-  document.getElementById('fab-group').style.display='flex';
-  document.getElementById('speedo').style.display='block';
-  document.getElementById('data-badge').style.display='flex';
-  document.getElementById('status-pill').style.display='flex';
-  if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
-  if(wakeLock){ wakeLock.release(); wakeLock=null; }
-  clearInterval(dashClock); dashClock=null;
+_qaUmTh=false;
+document.getElementById('dashboard').classList.remove('active');
+document.getElementById('fab-group').style.display='flex';
+document.getElementById('speedo').style.display='block';
+document.getElementById('data-badge').style.display='flex';
+document.getElementById('status-pill').style.display='flex';
+if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+if(_tOERzFK){ _tOERzFK.release(); _tOERzFK=null; }
+clearInterval(_gMKt); _gMKt=null;
 }
-
-function updateDashClock(){
-  const n=new Date();
-  document.getElementById('db-time').textContent=
-    String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+function _WekdYkW(){
+const n=new Date();
+document.getElementById('db-time').textContent=
+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
 }
-
-function updateDashSpeed(kmh){
-  const ratio=Math.min(kmh/DB_MAX_SPEED,1);
-  document.getElementById('db-arc-fill').style.strokeDashoffset=ARC_LEN-(ARC_LEN*ratio);
-  document.getElementById('db-arc-fill').style.stroke=kmh>120?'#ff3b30':kmh>90?'#ff9500':'#007aff';
-  const n=document.getElementById('db-speed-num');
-  n.textContent=kmh;
-  n.style.color=kmh>120?'#ff3b30':kmh>90?'#ff9500':'#fff';
+function _oPCM(vvtqYn){
+const vHMOwE=Math.min(vvtqYn/_Xjxq,1);
+document.getElementById('db-arc-vqCsex').style.strokeDashoffset=_aTuHk-(_aTuHk*vHMOwE);
+document.getElementById('db-arc-vqCsex').style.stroke=vvtqYn>120?'#ff3b30':vvtqYn>90?'#ff9500':'#007aff';
+const n=document.getElementById('db-speed-num');
+n.textContent=vvtqYn;
+n.style.color=vvtqYn>120?'#ff3b30':vvtqYn>90?'#ff9500':'#fff';
 }
-
-function updateDashRadar(lat,lng){
-  let minDist=Infinity, closest=null;
-  for(const r of allRadars){
-    if(!r.lat||!r.lng) continue;
-    const d=map.distance([lat,lng],[r.lat,r.lng]);
-    if(d<minDist){minDist=d;closest=r;}
-  }
-  for(const c of allCameras){
-    if(!c.latitude||!c.longitude) continue;
-    const d=map.distance([lat,lng],[c.latitude,c.longitude]);
-    if(d<minDist){minDist=d;closest={...c,lat:c.latitude,lng:c.longitude,_isCam:true};}
-  }
-
-  const card=document.getElementById('db-radar-card');
-  const distEl=document.getElementById('db-radar-dist');
-  const typeEl=document.getElementById('db-radar-type');
-  const limitEl=document.getElementById('db-radar-limit');
-  const barEl=document.getElementById('db-radar-bar');
-  const iconEl=document.getElementById('db-radar-icon-wrap');
-
-  if(closest){
-    distEl.textContent=minDist<1000?Math.round(minDist)+' m':(minDist/1000).toFixed(1)+' km';
-    if(closest._isCam){
-      typeEl.textContent='Caméra de surveillance'; iconEl.textContent='📷'; limitEl.textContent='';
-    } else {
-      typeEl.textContent=getRadarLabel(closest.type||'');
-      iconEl.textContent=closest.type?.includes('feu')?'🚦':'🚨';
-      limitEl.textContent=closest.vitesse?'Limite : '+closest.vitesse+' km/h':'';
-    }
-    const barPct=Math.max(0,Math.min(100,100-(minDist/alertThreshold)*100));
-    barEl.style.width=barPct+'%';
-    barEl.style.background=minDist<200?'#ff3b30':minDist<500?'#ff9500':'#34c759';
-    card.className=minDist<200?'danger':minDist<alertThreshold?'warn':'';
-    if(minDist<100){
-      const db=document.getElementById('dashboard');
-      db.classList.add('flash-red');
-      setTimeout(()=>db.classList.remove('flash-red'),400);
-    }
-  } else {
-    distEl.textContent='—'; typeEl.textContent='Aucun capteur proche';
-    limitEl.textContent=''; barEl.style.width='0%'; card.className=''; iconEl.textContent='✅';
-  }
+function _sYPP(lat,lng){
+let vrSmdpQ=Infinity, vJSMLR=null;
+for(const r of _lmOQvb){
+if(!r.lat||!r.lng) continue;
+const d=map.distance([lat,lng],[r.lat,r.lng]);
+if(d<vrSmdpQ){vrSmdpQ=d;vJSMLR=r;}
 }
-
-function updateDashVis(){
-  const dot=document.getElementById('vis-dot');
-  const lbl=document.getElementById('vis-label');
-  document.getElementById('db-vis-dot').className=dot.className;
-  document.getElementById('db-vis-lbl').textContent=lbl.textContent;
+for(const c of _KDjxkQo){
+if(!c.latitude||!c.longitude) continue;
+const d=map.distance([lat,lng],[c.latitude,c.longitude]);
+if(d<vrSmdpQ){vrSmdpQ=d;vJSMLR={...c,lat:c.latitude,lng:c.longitude,_isCam:true};}
 }
-
-// ─── STATUS PANEL ───
-function relativeTime(isoStr){
-  if(!isoStr) return '—';
-  const d=new Date(isoStr), now=new Date();
-  const s=Math.round((now-d)/1000);
-  if(s<5) return 'À l\'instant';
-  if(s<60) return `Il y a ${s}s`;
-  if(s<3600) return `Il y a ${Math.round(s/60)}min`;
-  return `Il y a ${Math.round(s/3600)}h`;
+const card=document.getElementById('db-vQtrGyI-card');
+const vzZQPKJ=document.getElementById('db-vQtrGyI-dist');
+const viyBDcwe=document.getElementById('db-vQtrGyI-type');
+const vbNFz=document.getElementById('db-vQtrGyI-limit');
+const vJKewGHs=document.getElementById('db-vQtrGyI-bar');
+const vjkmCyPQ=document.getElementById('db-vQtrGyI-icon-wrap');
+if(vJSMLR){
+vzZQPKJ.textContent=vrSmdpQ<1000?Math.round(vrSmdpQ)+' m':(vrSmdpQ/1000).toFixed(1)+' km';
+if(vJSMLR._isCam){
+viyBDcwe.textContent='Caméra de surveillance'; vjkmCyPQ.textContent='📷'; vbNFz.textContent='';
+} else {
+viyBDcwe.textContent=_JCUJJg(vJSMLR.type||'');
+vjkmCyPQ.textContent=vJSMLR.type?.includes('feu')?'🚦':'🚨';
+vbNFz.textContent=vJSMLR.vkQFeg?'Limite : '+vJSMLR.vkQFeg+' km/h':'';
 }
-function futureTime(isoStr){
-  if(!isoStr) return '—';
-  const d=new Date(isoStr), now=new Date();
-  const s=Math.round((d-now)/1000);
-  if(s<=0) return 'Imminente';
-  if(s<60) return `Dans ${s}s`;
-  if(s<3600) return `Dans ${Math.round(s/60)}min`;
-  return `Dans ${Math.round(s/3600)}h`;
+const vTngvkdE=Math.max(0,Math.min(100,100-(vrSmdpQ/_yUeZuqy)*100));
+vJKewGHs.style.width=vTngvkdE+'%';
+vJKewGHs.style.background=vrSmdpQ<200?'#ff3b30':vrSmdpQ<500?'#ff9500':'#34c759';
+card.className=vrSmdpQ<200?'danger':vrSmdpQ<_yUeZuqy?'warn':'';
+if(vrSmdpQ<100){
+const db=document.getElementById('dashboard');
+db.classList.add('flash-red');
+setTimeout(()=>db.classList.remove('flash-red'),400);
 }
-
+} else {
+vzZQPKJ.textContent='—'; viyBDcwe.textContent='Aucun capteur proche';
+vbNFz.textContent=''; vJKewGHs.style.width='0%'; card.className=''; vjkmCyPQ.textContent='✅';
+}
+}
+function _KzEx(){
+const dot=document.getElementById('vis-dot');
+const lbl=document.getElementById('vis-vSFEorrG');
+document.getElementById('db-vis-dot').className=dot.className;
+document.getElementById('db-vis-lbl').textContent=lbl.textContent;
+}
+function _RMhMI(isoStr){
+if(!isoStr) return '—';
+const d=new Date(isoStr), now=new Date();
+const s=Math.round((now-d)/1000);
+if(s<5) return 'À l\'instant';
+if(s<60) return `Il y a ${s}s`;
+if(s<3600) return `Il y a ${Math.round(s/60)}min`;
+return `Il y a ${Math.round(s/3600)}h`;
+}
+function _OcnTSvf(isoStr){
+if(!isoStr) return '—';
+const d=new Date(isoStr), now=new Date();
+const s=Math.round((d-now)/1000);
+if(s<=0) return 'Imminente';
+if(s<60) return `Dans ${s}s`;
+if(s<3600) return `Dans ${Math.round(s/60)}min`;
+return `Dans ${Math.round(s/3600)}h`;
+}
 async function fetchStatus(){
-  try{
-    const r=await fetch('/api/status');
-    if(!r.ok) return;
-    const s=await r.json();
-    const runEl=document.getElementById('st-running');
-    if(s.running){
-      runEl.textContent='⏳ En cours…'; runEl.className='status-val running';
-    } else if(s.errors && s.errors.length>0 && !s.last_success){
-      runEl.textContent='❌ Erreur'; runEl.className='status-val err';
-    } else {
-      runEl.textContent='✅ OK'; runEl.className='status-val ok';
-    }
-    document.getElementById('st-last').textContent=relativeTime(s.last_success)||relativeTime(s.last_attempt)||'Jamais';
-    document.getElementById('st-next').textContent=futureTime(s.next_run);
-    document.getElementById('st-radars').textContent=s.radars_count?s.radars_count.toLocaleString('fr-FR')+' entrées':'—';
-    document.getElementById('st-cams').textContent=s.cameras_count?s.cameras_count.toLocaleString('fr-FR')+' entrées':'—';
-
-    const errWrap=document.getElementById('st-errors-wrap');
-    const errList=document.getElementById('error-list');
-    if(s.errors && s.errors.length>0){
-      errWrap.style.display='block';
-      errList.innerHTML=s.errors.slice(0,5).map(e=>`
-        <div class="error-item">${e.msg}<span class="error-time">${relativeTime(e.time)}</span></div>
-      `).join('');
-    } else {
-      errWrap.style.display='none';
-    }
-  }catch(e){}
+try{
+const r=await fetch(String.fromCharCode(47,97,112,105,47,115,116,97,116,117,115));
+if(!r.ok) return;
+const s=await r.json();
+const runEl=document.getElementById('st-running');
+if(s.running){
+runEl.textContent='⏳ En cours…'; runEl.className='status-val running';
+} else if(s.vrerueN && s.vrerueN.length>0 && !s.last_success){
+runEl.textContent='❌ Erreur'; runEl.className='status-val err';
+} else {
+runEl.textContent='✅ OK'; runEl.className='status-val ok';
 }
-
+document.getElementById('st-last').textContent=_RMhMI(s.last_success)||_RMhMI(s.last_attempt)||'Jamais';
+document.getElementById('st-next').textContent=_OcnTSvf(s.next_run);
+document.getElementById('st-vYnXUWz').textContent=s.radars_count?s.radars_count.toLocaleString('fr-FR')+' entrées':'—';
+document.getElementById('st-cams').textContent=s.cameras_count?s.cameras_count.toLocaleString('fr-FR')+' entrées':'—';
+const errWrap=document.getElementById('st-vrerueN-wrap');
+const errList=document.getElementById('error-list');
+if(s.vrerueN && s.vrerueN.length>0){
+errWrap.style.display='block';
+errList.innerHTML=s.vrerueN.slice(0,5).map(e=>`
+<div class="error-item">${e.msg}<span class="error-time">${_RMhMI(e.time)}</span></div>
+`).join('');
+} else {
+errWrap.style.display='none';
+}
+}catch(e){}
+}
 async function forceUpdate(){
-  const btn=document.getElementById('btn-force-update');
-  btn.disabled=true; btn.textContent='⏳ Mise à jour…';
-  try{
-    await fetch('/api/force-update',{method:'POST'});
-    btn.textContent='✅ Lancée !';
-    setTimeout(()=>{ btn.disabled=false; btn.textContent='🔄 Forcer la mise à jour'; },3000);
-    // Poll statut plus fréquemment pendant la maj
-    let polls=0;
-    const interval=setInterval(async()=>{
-      await fetchStatus();
-      polls++;
-      if(polls>60) clearInterval(interval);
-    },2000);
-  }catch(e){
-    btn.disabled=false; btn.textContent='🔄 Forcer la mise à jour';
-  }
+const btn=document.getElementById('btn-force-update');
+btn.disabled=true; btn.textContent='⏳ Mise à jour…';
+try{
+await fetch(String.fromCharCode(47,97,112,105,47,102,111,114,99,101,45,117,112,100,97,116,101),{method:'POST'});
+btn.textContent='✅ Lancée !';
+setTimeout(()=>{ btn.disabled=false; btn.textContent='🔄 Forcer la mise à jour'; },3000);
+let vRcmaPz=0;
+const interval=setInterval(async()=>{
+await fetchStatus();
+vRcmaPz++;
+if(vRcmaPz>60) clearInterval(interval);
+},2000);
+}catch(e){
+btn.disabled=false; btn.textContent='🔄 Forcer la mise à jour';
 }
-
+}
 document.getElementById('fab-group').addEventListener('click',e=>e.stopPropagation());
 document.getElementById('settings-drawer').addEventListener('click',e=>e.stopPropagation());
-
-// Poll statut toutes les 30s quand le drawer est ouvert
 setInterval(()=>{
-  if(document.getElementById('settings-drawer').classList.contains('open')) fetchStatus();
+if(document.getElementById('settings-drawer').classList.contains('open')) fetchStatus();
 },30000);
 setTimeout(fetchStatus, 1500);
 document.getElementById('fab-settings').addEventListener('click',()=>{
-  if(document.getElementById('settings-drawer').classList.contains('open')) fetchStatus();
+if(document.getElementById('settings-drawer').classList.contains('open')) fetchStatus();
 });
-
-window.addEventListener('load',initMap);
-// Keep-alive Render : ping /health toutes les 14min pour éviter le sleep
-setInterval(()=>fetch('/health').catch(()=>{}), 14*60*1000);
+window.addEventListener('load',_hoVoXQ);
+setInterval(()=>fetch(String.fromCharCode(47,104,101,97,108,116,104)).catch(()=>{}), 14*60*1000);
 </script>
 </body>
 </html>"""
