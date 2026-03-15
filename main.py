@@ -599,28 +599,19 @@ def index():
 
 <script>
 (function(){
-const _dp=function(){};
 const _t=new Date();
 setInterval(function(){
-  const _n=new Date();
-  if(_n-_t>200){(function(){})['constructor']('debugger')();}
+const _n=new Date();
+if(_n-_t>200){(function(){})['constructor']('debugger')();}
 },50);
-const _x=function(){
-  const _el=new Image();
-  Object.defineProperty(_el,'id',{get:function(){
-    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#000;color:#fff;font-size:24px;flex-direction:column;gap:16px"><span style="font-size:48px">🚫</span><b>Accès refusé</b></div>';
-    throw new Error();
-  }});
-  console.log('%c ',_el);
-};
-setInterval(_x,1000);
 })();
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('keydown',e=>{
-  if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&['I','J','C','U'].includes(e.key))||(e.ctrlKey&&e.key==='U')){
-    e.preventDefault();e.stopPropagation();return false;
-  }
+if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&['I','J','C','U'].includes(e.key))||(e.ctrlKey&&e.key==='U')){
+e.preventDefault();e.stopPropagation();return false;
+}
 });
+
 const _Nedhor = {
 day: {
 url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
