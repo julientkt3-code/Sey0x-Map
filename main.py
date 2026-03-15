@@ -479,6 +479,22 @@ def index():
     </div>
   </div>
   <div class="divider"></div>
+  <div class="drawer-title">Zoom du suivi GPS</div>
+  <div class="thresh-display">
+    <div class="thresh-top">
+      <span class="setting-label">Niveau</span>
+      <span class="setting-label" id="zoom-val" style="color:var(--accent);font-size:15px;font-weight:800">Zoom 15</span>
+    </div>
+    <input type="range" min="12" max="19" step="1" value="15" id="zoom-slider" oninput="updateFollowZoom(this.value)">
+    <div class="thresh-badges">
+      <span class="zoom-badge thresh-badge" data-z="12" onclick="updateFollowZoom(12)">🌍 Très large</span>
+      <span class="zoom-badge thresh-badge" data-z="14" onclick="updateFollowZoom(14)">🏙️ Ville</span>
+      <span class="zoom-badge thresh-badge sel" data-z="15" onclick="updateFollowZoom(15)">🏘️ Quartier</span>
+      <span class="zoom-badge thresh-badge" data-z="17" onclick="updateFollowZoom(17)">🛣️ Rue</span>
+      <span class="zoom-badge thresh-badge" data-z="19" onclick="updateFollowZoom(19)">🔍 Max</span>
+    </div>
+  </div>
+  <div class="divider"></div>
   <button class="action-btn btn-primary" onclick="testBeep()">🔊 Tester le son</button>
   <button class="action-btn btn-secondary" id="btn-test-line" onclick="toggleTestLine()">📍 Tester ligne radar</button>
   <div class="divider"></div>
@@ -584,6 +600,7 @@ let radarCluster = L.markerClusterGroup({disableClusteringAtZoom:15,maxClusterRa
 let cameraCluster = L.markerClusterGroup({disableClusteringAtZoom:15,maxClusterRadius:50,animate:false,chunkedLoading:true});
 let allRadars=[], allCameras=[], allTroncons=[];
 let following=true, testLine=false;
+let followZoom=15;
 let lastPos={lat:48.8566,lng:2.3522,heading:0};
 let alertedSet=new Set(), alertThreshold=500;
 let audioCtx=null;
@@ -623,6 +640,16 @@ function initMap(){
   },300);
 
   map.on('dragstart',()=>{ following=false; document.getElementById('fab-locate').classList.remove('active'); });
+  // Quand l'utilisateur zoome manuellement, on mémorise le nouveau zoom pour le suivi
+  map.on('zoomend',()=>{
+    if(following){
+      followZoom=map.getZoom();
+      // Sync slider et badges sans déclencher setView
+      document.getElementById('zoom-val').textContent='Zoom '+followZoom;
+      if(document.getElementById('zoom-slider')) document.getElementById('zoom-slider').value=followZoom;
+      document.querySelectorAll('.zoom-badge').forEach(b=>b.classList.toggle('sel',parseInt(b.dataset.z)===followZoom));
+    }
+  });
   map.on('click',()=>document.getElementById('settings-drawer').classList.remove('open'));
 
   loadRadars(); loadCameras();
@@ -672,7 +699,7 @@ function onPosition(pos){
     _lastVisibilityCheck=now;
   }
   updateAlerts(lat,lng);
-  if(following) map.setView([lat,lng],map.getZoom()<15?15:map.getZoom());
+  if(following) map.setView([lat,lng], followZoom, {animate:true,duration:0.5});
   if(dashActive){ updateDashSpeed(kmh); updateDashRadar(lat,lng); }
 }
 
@@ -1085,8 +1112,7 @@ function toggleFollow(){
   following=!following;
   document.getElementById('fab-locate').classList.toggle('active',following);
   if(following){
-    // Recentrer immédiatement sur la position actuelle
-    map.setView([lastPos.lat,lastPos.lng], map.getZoom()<15?15:map.getZoom(), {animate:true});
+    map.setView([lastPos.lat,lastPos.lng], followZoom, {animate:true,duration:0.6});
   }
 }
 function toggleSettings(){
@@ -1131,6 +1157,16 @@ function updateThresh(v){
 }
 function setThresh(v){
   updateThresh(v);
+}
+function updateFollowZoom(v){
+  followZoom=parseInt(v);
+  document.getElementById('zoom-val').textContent='Zoom '+v;
+  document.getElementById('zoom-slider').value=v;
+  document.querySelectorAll('.zoom-badge').forEach(b=>{
+    b.classList.toggle('sel', parseInt(b.dataset.z)===followZoom);
+  });
+  // Appliquer immédiatement si suivi actif
+  if(following) map.setView([lastPos.lat,lastPos.lng], followZoom, {animate:true,duration:0.5});
 }
 function toggleTestLine(){
   testLine=!testLine;
